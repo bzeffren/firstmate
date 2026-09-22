@@ -79,6 +79,13 @@ FM_BACKLOG_CLOSE_REPLAY_RESULT=
 # shellcheck source=bin/fm-timeout-lib.sh disable=SC1091
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-timeout-lib.sh"
 
+# What a GitHub pull-request URL and a GitLab merge-request URL each look like
+# is fm-pr-lib.sh's fm_pr_url_parse alone; it is stateless plain function and
+# variable definitions with no side effect at source time, so pulling it in
+# here carries the same low cost as fm-timeout-lib.sh above.
+# shellcheck source=bin/fm-pr-lib.sh disable=SC1091
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-pr-lib.sh"
+
 # Latched when a row read hits its bound. fm_backlog_row_show runs inside a
 # command substitution, so the subshell can READ this latch but cannot set it;
 # the callers that capture its status own the write.
@@ -813,11 +820,34 @@ fm_backlog_dispatch_rollback() {
   return 0
 }
 
+# tasks-axi's --pr flag accepts only a GitHub pull-request URL
+# (https://github.com/<owner>/<repo>/pull/<number>); a confirmed GitLab
+# merge-request URL is refused there. Both the ordinary close below and a
+# later replay of a stranded state/<id>.backlog-close record pass their
+# completion args through here first, so a recorded (--pr <url>) pair is
+# rewritten once, in the one place both paths share, to a note that carries
+# the identical link in the row's own body instead - a GitLab merge request
+# then completes exactly like every other completion, on the first attempt or
+# on replay. fm-pr-lib.sh's fm_pr_url_parse is the one owner of what a GitLab
+# merge-request URL looks like; a GitHub URL, or anything fm_pr_url_parse does
+# not recognize, is passed through unchanged.
+FM_BACKLOG_COMPLETION_ARGS=()
+fm_backlog_completion_args_normalize() {  # [flag...]
+  FM_BACKLOG_COMPLETION_ARGS=("$@")
+  if [ "${#FM_BACKLOG_COMPLETION_ARGS[@]}" -eq 2 ] \
+     && [ "${FM_BACKLOG_COMPLETION_ARGS[0]}" = --pr ] \
+     && fm_pr_url_parse "${FM_BACKLOG_COMPLETION_ARGS[1]}" \
+     && [ "$FM_PR_PROVIDER" = gitlab ]; then
+    FM_BACKLOG_COMPLETION_ARGS=(--note "GitLab merge request: ${FM_BACKLOG_COMPLETION_ARGS[1]}")
+  fi
+}
+
 fm_backlog_close_transition() {
   local meta=$1 marker=$2 data=$3 id=$4 state=$5
   shift 5
   [ -z "$meta" ] || fm_backlog_record_remove "$meta" "task record" "$state" || return 1
-  fm_backlog_done "$data" "$id" "$@" || return 1
+  fm_backlog_completion_args_normalize "$@"
+  fm_backlog_done "$data" "$id" "${FM_BACKLOG_COMPLETION_ARGS[@]+"${FM_BACKLOG_COMPLETION_ARGS[@]}"}" || return 1
   fm_backlog_record_remove "$marker" "pending-close record" "$state"
 }
 
