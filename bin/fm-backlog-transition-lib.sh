@@ -857,7 +857,8 @@ fm_backlog_retain_transition() {
   local meta=$1 marker=$2 data=$3 id=$4 state=$5
   shift 5
   [ -z "$meta" ] || fm_backlog_record_remove "$meta" "task record" "$state" || return 1
-  fm_backlog_retain "$data" "$id" "$@" || return 1
+  fm_backlog_completion_args_normalize "$@"
+  fm_backlog_retain "$data" "$id" "${FM_BACKLOG_COMPLETION_ARGS[@]+"${FM_BACKLOG_COMPLETION_ARGS[@]}"}" || return 1
   fm_backlog_record_remove "$marker" "pending-close record" "$state"
 }
 
