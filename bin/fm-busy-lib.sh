@@ -41,7 +41,8 @@
 #   kimi-wire, kimi-hook  reserved: standalone Kimi, gated by fm_busy_kimi_verified
 # Firstmate-owned sources accepted for every converted adapter:
 #   fm-spawn         the launch-brief turn seeded at spawn
-#   fm-interrupt     the legacy Claude fm-send --key Escape idle event, and the
+#   fm-interrupt     the Claude manual-interrupt idle correction shared by
+#                    fm-send --key Escape and fm-control interrupt, and the
 #                    unknown invalidation fm-control writes after a Devin interrupt
 #   fm-recovery      a documented recovery reset after relaunch
 # Classifier-only sources (never written into a record):
@@ -1212,4 +1213,39 @@ fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
   local verdict
   verdict=$(fm_busy_classify "$@")
   [ "${verdict%% *}" = busy ]
+}
+
+# fm_busy_record_manual_interrupt: correct the semantic busy ledger after a
+# manual interrupt key reaches a hook-based busy source. Claude's contract
+# (claude-hook above) is a UserPromptSubmit/Stop bracket; a manual interrupt
+# key emits neither hook, so without this call the ledger is left claiming
+# busy indefinitely - including across a blocking tool prompt (a trust
+# dialog, or a tool like AskUserQuestion) that a manual interrupt correctly
+# dismisses without ever reaching Stop. A caller that gates on busy state
+# (bin/fm-watch.sh's steering-inbox ladder among them) then treats the pane
+# as still provably working forever, so a durable steer already queued for
+# it is never delivered until something else corrects the ledger by hand.
+# Scoped to Claude, whose hook bracket needs this explicit correction; every
+# other harness is a no-op here and retains the verdict from its own source.
+# <meta> optionally supplies the recorded busy_gen so the event
+# binds to the exact incarnation on record rather than whatever is armed
+# right now; omit it to bind with --current-gen. A task whose busy tracking
+# was never armed (no .busy-gen sidecar) has nothing to correct.
+# This is the one owner of the correction: bin/fm-send.sh's --key Escape path
+# and bin/fm-control.sh's interrupt verb both call it rather than keeping
+# separate copies, so the two interrupt entry points cannot drift apart on
+# what a manual interrupt does to busy state.
+fm_busy_record_manual_interrupt() {  # <fm-root> <state-dir> <id> <harness> [meta-file]
+  local root=$1 state=$2 id=$3 harness=$4 meta=${5:-} gen
+  case "$harness" in claude*) : ;; *) return 0 ;; esac
+  [ -f "$state/$id.busy-gen" ] || return 0
+  gen=
+  [ -z "$meta" ] || gen=$(fm_meta_get "$meta" busy_gen)
+  if [ -n "$gen" ]; then
+    "$root/bin/fm-busy-event.sh" apply "$state" "$id" idle \
+      --gen "$gen" --source fm-interrupt --event interrupt
+  else
+    "$root/bin/fm-busy-event.sh" apply "$state" "$id" idle \
+      --current-gen --source fm-interrupt --event interrupt
+  fi
 }

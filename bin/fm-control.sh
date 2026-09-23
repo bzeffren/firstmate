@@ -27,7 +27,10 @@
 #              owned acknowledgement and otherwise reported unconfirmed. Busy
 #              state is never rewritten as proof of the action. Devin
 #              cancellation invalidates it to unknown because its native hooks
-#              emit no cancellation close; this is not a success claim.
+#              emit no cancellation close; this is not a success claim. Claude's
+#              key likewise emits no closing lifecycle hook, so after delivery
+#              this separately records idle/fm-interrupt; that correction is
+#              not cancellation proof either.
 #              An adapter whose repeated interrupt key does something else on
 #              an idle agent (Devin's revert picker) sends its later presses
 #              only after the first press rendered a running turn, and
@@ -545,6 +548,16 @@ do_interrupt() {
   local proof cancel
   cancel=$(deliver_interrupt) || return $?
   proof=$(verify_interrupt_running) || return $?
+  # A manual interrupt key emits no hook on a hook-based busy source (Claude's
+  # UserPromptSubmit/Stop bracket), so without this the semantic busy ledger
+  # is left claiming busy indefinitely - including across a blocking tool
+  # prompt this same key just safely dismissed - and a caller that gates on
+  # busy state (the steering-inbox ladder in bin/fm-watch.sh) never delivers
+  # an already-queued steer until something else corrects the ledger by hand.
+  # fm_busy_record_manual_interrupt is the one owner of that correction; it
+  # is a no-op for every harness whose busy source is not hook-based.
+  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$META" \
+    || die "task $ID's interrupt key landed, but its Claude busy state could not be corrected afterward"
   printf '%s cancel=%s' "$proof" "$cancel"
 }
 

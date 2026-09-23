@@ -25,6 +25,8 @@ set -u
 . "$ROOT/bin/fm-control-lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-marker-lib.sh"
+# shellcheck source=/dev/null
+. "$ROOT/bin/fm-busy-lib.sh"
 
 CONTROL="$ROOT/bin/fm-control.sh"
 SEND="$ROOT/bin/fm-send.sh"
@@ -854,10 +856,14 @@ test_idle_agent_is_not_interrupted() {
 }
 
 test_interrupt_without_acknowledgement_preserves_busy_state() {
+  # codex (not claude): its busy source is not hook-based, so
+  # fm_busy_record_manual_interrupt is a no-op for it and this stays a clean
+  # probe of the adapter-acknowledgement claim alone. Claude's own interrupt
+  # busy-state correction is covered separately below.
   local dir gen before after out rc
   dir=$(new_case unconfirmed)
-  add_task "$dir" t1 claude
-  alive_as "$dir" claude
+  add_task "$dir" t1 codex
+  alive_as "$dir" codex
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
   printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
   before=$(cat "$dir/home/state/t1.busy-state")
@@ -869,7 +875,34 @@ test_interrupt_without_acknowledgement_preserves_busy_state() {
     "the result should distinguish delivery proof from unconfirmed cancellation"
   assert_not_contains "$out" "cancel=confirmed" \
     "an adapter without acknowledgement must not report cancellation"
-  pass "fm-control interrupt: unconfirmed delivery preserves observed busy state"
+  pass "fm-control interrupt: unconfirmed delivery preserves observed busy state (non-hook-based busy source)"
+}
+
+# Claude's busy contract is a UserPromptSubmit/Stop hook bracket
+# (harness-adapters skill), and a manual interrupt key emits neither hook. A
+# worker parked inside a blocking tool prompt (a trust dialog, or a tool like
+# AskUserQuestion) that fm-control interrupt safely dismisses would otherwise
+# be left reading busy forever: bin/fm-watch.sh's steering-inbox ladder gates
+# its whole delivery attempt on busy state, so an already-queued steer would
+# never be re-attempted even after the obstruction is gone (fix-worker-ask-
+# inbox-deadlock). This pins the fix: fm-control's interrupt verb must apply
+# the same idle/fm-interrupt correction bin/fm-send.sh's --key Escape path
+# already applies (tests/fm-send-settle.test.sh
+# test_claude_escape_records_interrupt_idle), so the two interrupt entry
+# points cannot drift apart on what a manual interrupt does to busy state.
+test_claude_interrupt_records_interrupt_idle() {
+  local dir gen out rc after
+  dir=$(new_case claude-interrupt)
+  add_task "$dir" t1 claude
+  alive_as "$dir" claude
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
+  printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
+  out=$(run_control "$dir" t1 interrupt); rc=$?
+  expect_code 0 "$rc" "a Claude interrupt should succeed"$'\n'"$out"
+  after=$(fm_busy_classify tmux "fmses:fm-t1" claude t1 "$dir/home/state")
+  [ "$after" = "idle fm-interrupt" ] \
+    || fail "a Claude interrupt must classify idle/fm-interrupt, got '$after'"
+  pass "fm-control interrupt: a Claude interrupt records the same interrupt lifecycle edge fm-send's --key Escape does"
 }
 
 test_muse_interrupt_confirms_adapter_acknowledgement() {
@@ -1063,6 +1096,7 @@ test_ambiguous_endpoint_refuses
 test_busy_agent_is_interrupted_before_the_exit_command
 test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
+test_claude_interrupt_records_interrupt_idle
 test_muse_interrupt_confirms_adapter_acknowledgement
 test_interrupt_revalidates_agent_after_acknowledgement_wait
 test_exit_accepts_agent_stopped_by_busy_interrupt
