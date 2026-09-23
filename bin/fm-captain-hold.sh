@@ -962,6 +962,7 @@ apply_pending_retained_artifact() {  # <task-id>
         || { report_retained_artifact_failure "$id" "$marker"; return 1; }
       ;;
     --note)
+      [ "${args[1]}" != "local%20main" ] || args[1]="local main"
       data_abs=$(fm_backlog_data_absolute "$DATA") \
         && fm_backlog_deliverable_record "$DATA" "$data_abs" "$id" "${args[1]}" \
         || { report_retained_artifact_failure "$id" "$marker"; return 1; }
