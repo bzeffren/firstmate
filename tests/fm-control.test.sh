@@ -24,6 +24,8 @@ set -u
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-control-lib.sh"
 # shellcheck source=/dev/null
+. "$ROOT/bin/fm-backend.sh"
+# shellcheck source=/dev/null
 . "$ROOT/bin/fm-marker-lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-busy-lib.sh"
