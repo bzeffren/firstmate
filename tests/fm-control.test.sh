@@ -905,6 +905,23 @@ test_claude_interrupt_records_interrupt_idle() {
   pass "fm-control interrupt: a Claude interrupt records the same interrupt lifecycle edge fm-send's --key Escape does"
 }
 
+test_interrupt_correction_yields_to_a_newer_turn() {
+  local dir gen seq after
+  dir=$(new_case newer-turn)
+  add_task "$dir" t1 claude
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
+  printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
+  seq=$(fm_busy_record_seq "$dir/home/state" t1)
+  "$ROOT/bin/fm-busy-event.sh" apply "$dir/home/state" t1 busy \
+    --gen "$gen" --source claude-hook --event UserPromptSubmit
+  fm_busy_record_manual_interrupt "$ROOT" "$dir/home/state" t1 claude "$dir/home/state/t1.meta" "$seq" \
+    || fail "a superseded interrupt correction must not error"
+  after=$(fm_busy_record_read "$dir/home/state" t1)
+  [ "${after%% *}" = busy ] \
+    || fail "an interrupt correction must not overwrite a newer turn, got '$after'"
+  pass "fm-control interrupt: the busy correction yields to a turn that began after the key"
+}
+
 test_muse_interrupt_confirms_adapter_acknowledgement() {
   local dir root log out rc
   dir=$(new_case confirmed)
@@ -988,6 +1005,8 @@ test_agent_that_does_not_stop_fails_closed() {
     || fail "a stubborn busy agent should receive its interrupt sequence"
   [ "$(literals "$dir")" = /exit ] \
     || fail "a stubborn busy agent should receive its exit command"
+  [ "$(fm_busy_classify tmux "fmses:fm-t1" claude t1 "$dir/home/state")" = "idle fm-interrupt" ] \
+    || fail "a surviving agent's canceled turn must not stay recorded busy after exit's interrupt"
   pass "fm-control exit: a stubborn agent reports delivered input and an unconfirmed exit"
 }
 
@@ -1097,6 +1116,7 @@ test_busy_agent_is_interrupted_before_the_exit_command
 test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
 test_claude_interrupt_records_interrupt_idle
+test_interrupt_correction_yields_to_a_newer_turn
 test_muse_interrupt_confirms_adapter_acknowledgement
 test_interrupt_revalidates_agent_after_acknowledgement_wait
 test_exit_accepts_agent_stopped_by_busy_interrupt

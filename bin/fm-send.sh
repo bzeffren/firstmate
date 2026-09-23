@@ -306,7 +306,7 @@ fm_send_record_interrupt() { # <key>
   [ "$key" = Escape ] || return 0
   [ -n "$TARGET_META" ] || return 0
   id=$(fm_send_id_from_meta "$TARGET_META")
-  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$id" "$TARGET_HARNESS" "$TARGET_META" || {
+  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$id" "$TARGET_HARNESS" "$TARGET_META" "${interrupt_seq:-}" || {
     echo "error: key '$key' reached $T, but the Claude interrupt state could not be recorded for $id" >&2
     return 1
   }
@@ -765,6 +765,10 @@ if [ "${1:-}" = "--key" ]; then
   esac
   key=$2
   semantic_key=$(fm_send_normalize_key "$key")
+  interrupt_seq=
+  if [ "$semantic_key" = Escape ] && [ -n "$TARGET_META" ]; then
+    interrupt_seq=$(fm_busy_record_seq "$STATE" "$(fm_send_id_from_meta "$TARGET_META")")
+  fi
   if [ "$TARGET_BACKEND" = remote ]; then
     FM_SEND_REMOTE_BUDGET=${FM_SEND_REMOTE_BUDGET:-30}
     case "$FM_SEND_REMOTE_BUDGET" in

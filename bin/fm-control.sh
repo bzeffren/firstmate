@@ -545,7 +545,8 @@ verify_interrupt_running() {
 }
 
 do_interrupt() {
-  local proof cancel
+  local proof cancel seq
+  seq=$(fm_busy_record_seq "$STATE" "$ID")
   cancel=$(deliver_interrupt) || return $?
   proof=$(verify_interrupt_running) || return $?
   # A manual interrupt key emits no hook on a hook-based busy source (Claude's
@@ -556,7 +557,7 @@ do_interrupt() {
   # an already-queued steer until something else corrects the ledger by hand.
   # fm_busy_record_manual_interrupt is the one owner of that correction; it
   # is a no-op for every harness whose busy source is not hook-based.
-  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$META" \
+  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$META" "$seq" \
     || die "task $ID's interrupt key landed, but its Claude busy state could not be corrected afterward"
   printf '%s cancel=%s' "$proof" "$cancel"
 }
@@ -570,7 +571,7 @@ retire_busy_incarnation() {
 # do_exit: stop the running agent, preserving endpoint and worktree. Prints
 # `already-stopped`, `endpoint-gone`, or `stopped`.
 do_exit() {
-  local state cmd hazard verdict composer_state cancel absence interrupt_result=not-needed
+  local state cmd hazard verdict composer_state cancel absence seq interrupt_result=not-needed
   require_state_verified_backend exit
   state=$(agent_state)
   case "$state" in
@@ -618,6 +619,7 @@ do_exit() {
   # A busy agent is interrupted first before the exit command is submitted.
   case "$(busy_verdict)" in
     busy*)
+      seq=$(fm_busy_record_seq "$STATE" "$ID")
       cancel=$(deliver_interrupt) || return $?
       state=$(agent_state)
       case "$state" in
@@ -626,7 +628,11 @@ do_exit() {
           printf 'stopped'
           return 0
           ;;
-        alive) interrupt_result="delivered verified=agent-alive cancel=$cancel" ;;
+        alive)
+          fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$META" "$seq" \
+            || die "task $ID's interrupt key landed, but its Claude busy state could not be corrected afterward"
+          interrupt_result="delivered verified=agent-alive cancel=$cancel"
+          ;;
         missing) die "task $ID's recorded endpoint disappeared after interrupt delivery, so exit cannot prove whether the agent stopped" ;;
         *) die "task $ID's endpoint reads '$state' after interrupt delivery rather than a positively classified state; exit cannot prove whether the agent stopped" ;;
       esac
