@@ -953,7 +953,8 @@ apply_pending_retained_artifact() {  # <task-id>
   fm_backlog_close_marker_validate "$marker" "$DATA" "$id" "$STATE" \
     || { report_retained_artifact_failure "$id" "$marker"; return 1; }
   [ "$FM_BACKLOG_CLOSE_VALIDATED_MODE" = retain ] || return 0
-  args=("${FM_BACKLOG_CLOSE_VALIDATED_ARGS[@]+"${FM_BACKLOG_CLOSE_VALIDATED_ARGS[@]}"}")
+  fm_backlog_completion_args_normalize "${FM_BACKLOG_CLOSE_VALIDATED_ARGS[@]+"${FM_BACKLOG_CLOSE_VALIDATED_ARGS[@]}"}"
+  args=("${FM_BACKLOG_COMPLETION_ARGS[@]+"${FM_BACKLOG_COMPLETION_ARGS[@]}"}")
   case "${args[0]-}" in
     --pr|--report)
       fm_backlog_row_artifact_supported "$id" "${args[@]}" || return 0
