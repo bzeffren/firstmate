@@ -1,0 +1,33 @@
+ok - report-only unresolved captain call is reproduced and completion refuses before loss
+ok - both body-decoding paths work without the allow_nonref default
+ok - cleanup preserves every byte of a retained body's non-ASCII characters
+ok - the completion gate attests captain-held inventory and transfers open status decisions
+--- answered row ---
+task:
+  id: sample-gitlab-answer-before-replay
+  title: Ship GitLab MR
+  state: done
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: captain must confirm retained GitLab delivery
+  hold_kind: captain
+  hold_until: "-"
+  kind: ship
+  repo: sample
+  priority: "-"
+  created: "-"
+  closed: 2026-09-23
+  deps: none
+  links: none
+  body: "Resolution recorded by fm-captain-hold.\nDecision digest: 771107e73abc39cd7551bf355d10ca16e3a8724f9ee47f569086349baecdf94c\nResolution mode: answered\n\nCaptain decision:\nProceed with the merged GitLab result.\n\nDeliverable of the finished work: GitLab merge request: https://gitlab.com/example/repo/-/merge_requests/227"
+--- replay ---
+BOOTSTRAP_INFO: finished the interrupted cleanup for sample-gitlab-answer-before-replay; the captain had already answered its call
+MISSING: treehouse (install: curl -fsSL https://kunchenguid.github.io/treehouse/install.sh | sh)
+MISSING: no-mistakes (install: curl -fsSL https://raw.githubusercontent.com/kunchenguid/no-mistakes/main/docs/install.sh | sh)
+MISSING: gh-axi (install: npm install -g gh-axi && gh-axi setup hooks)
+PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish
+MISSING: quota-axi (install: npm install -g quota-axi)
+--- final marker ---
+absent: /private/var/folders/c5/r6gz0rfx449bkqcr_5vb64s80000gn/T/fm-captain-hold.P6CzVq/gitlab-answer-before-replay/state/sample-gitlab-answer-before-replay.backlog-close
+ok - an answer before cleanup replay preserves a retained GitLab merge request and replay retires its marker

@@ -1,0 +1,29 @@
+=== captain answer before replay ===
+answered: live-gitlab-answer-before-replay
+=== answered row before replay ===
+task:
+  id: live-gitlab-answer-before-replay
+  title: GitLab answer before replay
+  state: done
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: captain confirms retained GitLab delivery
+  hold_kind: captain
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: "-"
+  closed: 2026-09-23
+  deps: none
+  links: none
+  body: "Resolution recorded by fm-captain-hold.\nDecision digest: 771107e73abc39cd7551bf355d10ca16e3a8724f9ee47f569086349baecdf94c\nResolution mode: answered\n\nCaptain decision:\nProceed with the merged GitLab result.\n\nDeliverable of the finished work: GitLab merge request: https://gitlab.com/example/repo/-/merge_requests/227"
+=== marker before replay ===
+present
+=== session-start replay ===
+BOOTSTRAP_INFO: finished the interrupted cleanup for live-gitlab-answer-before-replay; the captain had already answered its call
+PRESENTATION_UNAVAILABLE: lavish-axi (requires >=0.1.77; install: npm install -g lavish-axi && lavish-axi setup hooks) - nonvisual work may proceed with plain-text decisions and reports; install or upgrade before using Lavish
+MISSING: quota-axi (install: npm install -g quota-axi)
+=== marker after replay ===
+absent

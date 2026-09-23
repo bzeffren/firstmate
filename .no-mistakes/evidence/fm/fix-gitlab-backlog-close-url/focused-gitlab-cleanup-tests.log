@@ -1,0 +1,5 @@
+ok - completion closes a ship carrying a confirmed GitLab merge request, keeping its link
+ok - completion reopens a ship carrying a confirmed GitLab merge request for the captain, keeping its link
+ok - session start finishes a close an interrupted cleanup recorded for a GitLab merge request
+ok - session start finishes a retention an interrupted cleanup recorded for a GitLab merge request
+ok - recovery rejects malformed PR URL values
