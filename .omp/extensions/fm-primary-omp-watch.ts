@@ -10,10 +10,10 @@
 //     accepted the follow-up" collapses to "the call returned"; consumption is
 //     still tracked at before_agent_start / message_start exactly as on Pi.
 //   - omp reports no session_shutdown reason, so EVERY shutdown with a pending
-//     actionable close persists the replacement handoff and the next owning
-//     session_start, in this process or a later one, replays it. Replaying a
-//     wake main has already drained is harmless (the queue is durable and the
-//     drain is idempotent); losing one across /new is not.
+//     actionable close persists the replacement handoff. The next owning
+//     session_start, in this process or a later one, reconciles each record
+//     against the durable wake queue: acknowledged records retire, while a
+//     record whose captured queue sequence remains is replayed.
 //   - Replacement shutdown retires the established predecessor arm before the
 //     successor arms; unlike Pi, it is not retained until a distinct active
 //     successor generation commits its own arm, so omp keeps the plain
@@ -1116,8 +1116,8 @@ export default function (pi: ExtensionAPI) {
   });
   pi.on?.("session_shutdown", async () => {
     // omp carries no shutdown reason (verified: `reason` is undefined), so the
-    // replacement handoff is always persisted when anything is pending; a
-    // terminal quit then merely replays an already-drained wake next start.
+    // replacement handoff is always persisted when anything is pending. The
+    // next owner reconciles it against the durable queue before replay.
     if (replacementCoordinator.receiver === receiveReplacementActionable) replacementCoordinator.receiver = null;
     await stopSessionGeneration(generation, true);
   });
