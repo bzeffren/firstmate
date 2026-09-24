@@ -1243,8 +1243,8 @@ fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
 # <snapshot> (from fm_busy_record_snapshot, read before the key was sent)
 # binds the correction to the exact incarnation and seq on record then: it is
 # a no-op once a relaunch replaced the incarnation or a newer event, such as
-# a new UserPromptSubmit, has landed. An empty snapshot means busy tracking
-# was never armed, so there is nothing to correct.
+# a new UserPromptSubmit, has landed. A missing, unreadable, multiline, or
+# malformed record yields an empty snapshot, so there is nothing safe to correct.
 # This is the one owner of the correction: bin/fm-send.sh's --key Escape path
 # and bin/fm-control.sh's interrupt verb both call it rather than keeping
 # separate copies, so the two interrupt entry points cannot drift apart on
@@ -1258,12 +1258,11 @@ fm_busy_record_manual_interrupt() {  # <fm-root> <state-dir> <id> <harness> [sna
     --gen "${snapshot%%:*}" --source fm-interrupt --event interrupt --if-seq "${snapshot##*:}"
 }
 
-# fm_busy_record_snapshot: "<gen>:<seq>" read from the busy record in one
-# read (the record is replaced atomically), or empty when there is no
-# readable record. A
-# caller captures it before it sends an interrupt key and passes it to
-# fm_busy_record_manual_interrupt, so neither a relaunch nor a turn that
-# begins after the key is overwritten as idle.
+# fm_busy_record_snapshot: "<gen>:<seq>" read from one complete, valid busy
+# record (the record is replaced atomically), or empty when no such record is
+# readable. A caller captures it before sending an interrupt key and passes it
+# to fm_busy_record_manual_interrupt, so neither a relaunch nor a later record
+# event is overwritten as idle.
 fm_busy_record_snapshot() {  # <state-dir> <id>
   local line extra parsed gen seq
   { IFS= read -r line && ! IFS= read -r extra; } < "$(fm_busy_record_path "$1" "$2")" 2>/dev/null || return 0

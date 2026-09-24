@@ -73,7 +73,7 @@ Escalate in order:
 
 1. Peek the pane, and check the task's steering inbox (`state/<id>.inbox/`) for unhandled `*.msg` records - a stale wake naming an unread firstmate instruction means the worker never acknowledged a durable steer, and the record itself shows exactly what was intended.
 2. If a Claude pane shows a blocking prompt owned by Claude itself - such as the Ask question modal, not the ordinary chat composer - never answer it by key, even when an unhandled inbox record already holds the answer: selecting an option there is answering on the captain's or worker-owner's behalf rather than routing the decision through firstmate.
-   Dismiss it with `FM_HOME=<this-firstmate-home> bin/fm-control.sh <task-id> interrupt`, which cancels the prompt without selecting anything; this also corrects the interrupted turn's busy record unless a newer lifecycle event has already superseded it.
+   Dismiss it with `FM_HOME=<this-firstmate-home> bin/fm-control.sh <task-id> interrupt`, which cancels the prompt without selecting anything; when the pre-interrupt busy record is valid and still current, this also corrects that record unless a newer lifecycle event has already superseded it.
    Once corrected, `bin/fm-watch.sh`'s steering-inbox delivery is no longer gated on the stale busy verdict and delivers any already-queued record on its own next poll.
    Resend a corrective line through `fm-send` only if the queued record does not already say enough on its own, or immediacy matters more than the watcher's own poll cadence.
 3. If the crewmate is waiting on a question its brief already answers, answer in one line via `FM_HOME=<this-firstmate-home> bin/fm-send.sh` from an active firstmate session unless `FM_HOME` is already set to the active firstmate home.
