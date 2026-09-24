@@ -253,6 +253,37 @@ fm_busy_source_trusted() {  # <harness> <source>
   return 1
 }
 
+# fm_busy_record_parse: validate one busy-record line against the full record
+# grammar. Prints "<gen> <state> <source> <event> <seq>" or fails.
+fm_busy_record_parse() {  # <line>
+  local ver f
+  local r_gen='' r_seq='' r_state='' r_source='' r_event='' r_ts=''
+  local -a fields
+  # `read -a` rather than `set --`: it never glob-expands a field and never
+  # touches the caller's positional parameters or shell options.
+  IFS=' ' read -r -a fields <<< "$1"
+  ver=${fields[0]:-}
+  [ "$ver" = "$FM_BUSY_LIB_VERSION" ] || return 1
+  for f in "${fields[@]:1}"; do
+    case "$f" in
+      gen=*) r_gen=${f#gen=} ;;
+      seq=*) r_seq=${f#seq=} ;;
+      state=*) r_state=${f#state=} ;;
+      source=*) r_source=${f#source=} ;;
+      event=*) r_event=${f#event=} ;;
+      ts=*) r_ts=${f#ts=} ;;
+      *) return 1 ;;
+    esac
+  done
+  fm_busy_token_valid "$r_gen" || return 1
+  fm_busy_token_valid "$r_source" || return 1
+  fm_busy_token_valid "$r_event" || return 1
+  case "$r_seq" in ''|*[!0-9]*) return 1 ;; esac
+  case "$r_ts" in ''|*[!0-9]*) return 1 ;; esac
+  case "$r_state" in busy|idle|unknown) : ;; *) return 1 ;; esac
+  printf '%s %s %s %s %s' "$r_gen" "$r_state" "$r_source" "$r_event" "$r_seq"
+}
+
 # fm_busy_record_read: parse and validate state/<id>.busy-state against the
 # armed gen. Prints "<state> <source> <event> <seq>" for a valid record.
 # Non-zero returns name the reason on stdout instead:
@@ -261,8 +292,8 @@ fm_busy_source_trusted() {  # <harness> <source>
 #                existing record
 #   gen-mismatch a record from a stale incarnation
 fm_busy_record_read() {  # <state-dir> <id>
-  local state=$1 id=$2 rec gen line extra ver f
-  local r_gen='' r_seq='' r_state='' r_source='' r_event='' r_ts=''
+  local state=$1 id=$2 rec gen line extra parsed
+  local r_gen r_seq r_state r_source r_event
   rec=$(fm_busy_record_path "$state" "$id")
   if [ ! -f "$rec" ]; then
     printf 'missing'
@@ -278,29 +309,11 @@ fm_busy_record_read() {  # <state-dir> <id>
     printf 'malformed'
     return 1
   }
-  # `read -a` rather than `set --`: it never glob-expands a field and never
-  # touches the caller's positional parameters or shell options.
-  local -a fields
-  IFS=' ' read -r -a fields <<< "$line"
-  ver=${fields[0]:-}
-  [ "$ver" = "$FM_BUSY_LIB_VERSION" ] || { printf 'malformed'; return 1; }
-  for f in "${fields[@]:1}"; do
-    case "$f" in
-      gen=*) r_gen=${f#gen=} ;;
-      seq=*) r_seq=${f#seq=} ;;
-      state=*) r_state=${f#state=} ;;
-      source=*) r_source=${f#source=} ;;
-      event=*) r_event=${f#event=} ;;
-      ts=*) r_ts=${f#ts=} ;;
-      *) printf 'malformed'; return 1 ;;
-    esac
-  done
-  fm_busy_token_valid "$r_gen" || { printf 'malformed'; return 1; }
-  fm_busy_token_valid "$r_source" || { printf 'malformed'; return 1; }
-  fm_busy_token_valid "$r_event" || { printf 'malformed'; return 1; }
-  case "$r_seq" in ''|*[!0-9]*) printf 'malformed'; return 1 ;; esac
-  case "$r_ts" in ''|*[!0-9]*) printf 'malformed'; return 1 ;; esac
-  case "$r_state" in busy|idle|unknown) : ;; *) printf 'malformed'; return 1 ;; esac
+  parsed=$(fm_busy_record_parse "$line") || {
+    printf 'malformed'
+    return 1
+  }
+  read -r r_gen r_state r_source r_event r_seq <<< "$parsed"
   if [ "$r_gen" != "$gen" ]; then
     printf 'gen-mismatch'
     return 1
@@ -1252,17 +1265,9 @@ fm_busy_record_manual_interrupt() {  # <fm-root> <state-dir> <id> <harness> [sna
 # fm_busy_record_manual_interrupt, so neither a relaunch nor a turn that
 # begins after the key is overwritten as idle.
 fm_busy_record_snapshot() {  # <state-dir> <id>
-  local line f gen='' seq=''
-  local -a fields
-  IFS= read -r line < "$(fm_busy_record_path "$1" "$2")" 2>/dev/null || return 0
-  IFS=' ' read -r -a fields <<< "$line"
-  for f in "${fields[@]:1}"; do
-    case "$f" in
-      gen=*) gen=${f#gen=} ;;
-      seq=*) seq=${f#seq=} ;;
-    esac
-  done
-  fm_busy_token_valid "$gen" || return 0
-  case "$seq" in ''|*[!0-9]*) return 0 ;; esac
+  local line extra parsed gen seq
+  { IFS= read -r line && ! IFS= read -r extra; } < "$(fm_busy_record_path "$1" "$2")" 2>/dev/null || return 0
+  parsed=$(fm_busy_record_parse "$line") || return 0
+  read -r gen _ _ _ seq <<< "$parsed"
   printf '%s:%s' "$gen" "$seq"
 }

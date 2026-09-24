@@ -942,6 +942,17 @@ test_interrupt_correction_yields_to_a_relaunched_incarnation() {
   pass "fm-control interrupt: the busy correction yields to a relaunched incarnation"
 }
 
+test_interrupt_snapshot_ignores_a_malformed_record() {
+  local dir gen snap
+  dir=$(new_case malformed-snapshot)
+  add_task "$dir" t1 claude
+  gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
+  printf 'v0 gen=%s seq=1 state=busy source=claude-hook event=x ts=1\n' "$gen" > "$dir/home/state/t1.busy-state"
+  snap=$(fm_busy_record_snapshot "$dir/home/state" t1)
+  [ -z "$snap" ] || fail "a malformed record must yield an empty snapshot, got '$snap'"
+  pass "fm-control interrupt: a malformed busy record is never corrected"
+}
+
 test_muse_interrupt_confirms_adapter_acknowledgement() {
   local dir root log out rc
   dir=$(new_case confirmed)
@@ -1138,6 +1149,7 @@ test_interrupt_without_acknowledgement_preserves_busy_state
 test_claude_interrupt_records_interrupt_idle
 test_interrupt_correction_yields_to_a_newer_turn
 test_interrupt_correction_yields_to_a_relaunched_incarnation
+test_interrupt_snapshot_ignores_a_malformed_record
 test_muse_interrupt_confirms_adapter_acknowledgement
 test_interrupt_revalidates_agent_after_acknowledgement_wait
 test_exit_accepts_agent_stopped_by_busy_interrupt
