@@ -1227,41 +1227,34 @@ fm_busy_is_busy() {  # <backend> <target> <harness> <id> <state-dir> [tail40]
 # it is never delivered until something else corrects the ledger by hand.
 # Scoped to Claude, whose hook bracket needs this explicit correction; every
 # other harness is a no-op here and retains the verdict from its own source.
-# <meta> optionally supplies the recorded busy_gen so the event
-# binds to the exact incarnation on record rather than whatever is armed
-# right now; omit it to bind with --current-gen. <expected-seq> (from
-# fm_busy_record_seq, read before the key was sent) makes the correction a
-# no-op once a newer event, such as a new UserPromptSubmit, has landed. A task whose busy tracking
-# was never armed (no .busy-gen sidecar) has nothing to correct.
+# <snapshot> (from fm_busy_record_snapshot, read before the key was sent)
+# binds the correction to the exact incarnation and seq on record then: it is
+# a no-op once a relaunch replaced the incarnation or a newer event, such as
+# a new UserPromptSubmit, has landed. An empty snapshot means busy tracking
+# was never armed, so there is nothing to correct.
 # This is the one owner of the correction: bin/fm-send.sh's --key Escape path
 # and bin/fm-control.sh's interrupt verb both call it rather than keeping
 # separate copies, so the two interrupt entry points cannot drift apart on
 # what a manual interrupt does to busy state.
-fm_busy_record_manual_interrupt() {  # <fm-root> <state-dir> <id> <harness> [meta-file] [expected-seq]
-  local root=$1 state=$2 id=$3 harness=$4 meta=${5:-} seq=${6:-} gen
-  local -a guard=()
+fm_busy_record_manual_interrupt() {  # <fm-root> <state-dir> <id> <harness> [snapshot]
+  local root=$1 state=$2 id=$3 harness=$4 snapshot=${5:-}
   case "$harness" in claude*) : ;; *) return 0 ;; esac
   [ -f "$state/$id.busy-gen" ] || return 0
-  [ -z "$seq" ] || guard=(--if-seq "$seq")
-  gen=
-  [ -z "$meta" ] || gen=$(fm_meta_get "$meta" busy_gen)
-  if [ -n "$gen" ]; then
-    "$root/bin/fm-busy-event.sh" apply "$state" "$id" idle \
-      --gen "$gen" --source fm-interrupt --event interrupt ${guard[@]+"${guard[@]}"}
-  else
-    "$root/bin/fm-busy-event.sh" apply "$state" "$id" idle \
-      --current-gen --source fm-interrupt --event interrupt ${guard[@]+"${guard[@]}"}
-  fi
+  [ -n "$snapshot" ] || return 0
+  "$root/bin/fm-busy-event.sh" apply "$state" "$id" idle \
+    --gen "${snapshot%%:*}" --source fm-interrupt --event interrupt --if-seq "${snapshot##*:}"
 }
 
-# fm_busy_record_seq: the record's current seq, or 0 when there is none. A
+# fm_busy_record_snapshot: "<gen>:<seq>" for the armed incarnation and its
+# record seq (0 when there is no record), or empty when no gen is armed. A
 # caller captures it before it sends an interrupt key and passes it to
-# fm_busy_record_manual_interrupt, so a turn that begins after the key is
-# never overwritten as idle.
-fm_busy_record_seq() {  # <state-dir> <id>
-  local out
+# fm_busy_record_manual_interrupt, so neither a relaunch nor a turn that
+# begins after the key is overwritten as idle.
+fm_busy_record_snapshot() {  # <state-dir> <id>
+  local out gen
   local -a fields
   out=$(fm_busy_record_read "$1" "$2") || out=
   IFS=' ' read -r -a fields <<< "$out"
-  printf '%s' "${fields[3]:-0}"
+  gen=$(fm_busy_current_gen "$1" "$2") || return 0
+  printf '%s:%s' "$gen" "${fields[3]:-0}"
 }

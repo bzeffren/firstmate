@@ -546,7 +546,7 @@ verify_interrupt_running() {
 
 do_interrupt() {
   local proof cancel seq
-  seq=$(fm_busy_record_seq "$STATE" "$ID")
+  seq=$(fm_busy_record_snapshot "$STATE" "$ID")
   cancel=$(deliver_interrupt) || return $?
   proof=$(verify_interrupt_running) || return $?
   # A manual interrupt key emits no hook on a hook-based busy source (Claude's
@@ -557,7 +557,7 @@ do_interrupt() {
   # an already-queued steer until something else corrects the ledger by hand.
   # fm_busy_record_manual_interrupt is the one owner of that correction; it
   # is a no-op for every harness whose busy source is not hook-based.
-  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$META" "$seq" \
+  fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$seq" \
     || die "task $ID's interrupt key landed, but its Claude busy state could not be corrected afterward"
   printf '%s cancel=%s' "$proof" "$cancel"
 }
@@ -619,7 +619,7 @@ do_exit() {
   # A busy agent is interrupted first before the exit command is submitted.
   case "$(busy_verdict)" in
     busy*)
-      seq=$(fm_busy_record_seq "$STATE" "$ID")
+      seq=$(fm_busy_record_snapshot "$STATE" "$ID")
       cancel=$(deliver_interrupt) || return $?
       state=$(agent_state)
       case "$state" in
@@ -629,7 +629,7 @@ do_exit() {
           return 0
           ;;
         alive)
-          fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$META" "$seq" \
+          fm_busy_record_manual_interrupt "$FM_ROOT" "$STATE" "$ID" "$HARNESS" "$seq" \
             || die "task $ID's interrupt key landed, but its Claude busy state could not be corrected afterward"
           interrupt_result="delivered verified=agent-alive cancel=$cancel"
           ;;

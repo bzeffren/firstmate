@@ -913,15 +913,33 @@ test_interrupt_correction_yields_to_a_newer_turn() {
   add_task "$dir" t1 claude
   gen=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
   printf 'busy_gen=%s\n' "$gen" >> "$dir/home/state/t1.meta"
-  seq=$(fm_busy_record_seq "$dir/home/state" t1)
+  seq=$(fm_busy_record_snapshot "$dir/home/state" t1)
   "$ROOT/bin/fm-busy-event.sh" apply "$dir/home/state" t1 busy \
     --gen "$gen" --source claude-hook --event UserPromptSubmit
-  fm_busy_record_manual_interrupt "$ROOT" "$dir/home/state" t1 claude "$dir/home/state/t1.meta" "$seq" \
+  fm_busy_record_manual_interrupt "$ROOT" "$dir/home/state" t1 claude "$seq" \
     || fail "a superseded interrupt correction must not error"
   after=$(fm_busy_record_read "$dir/home/state" t1)
   [ "${after%% *}" = busy ] \
     || fail "an interrupt correction must not overwrite a newer turn, got '$after'"
   pass "fm-control interrupt: the busy correction yields to a turn that began after the key"
+}
+
+test_interrupt_correction_yields_to_a_relaunched_incarnation() {
+  local dir gen1 gen2 snap after
+  dir=$(new_case relaunch)
+  add_task "$dir" t1 claude
+  gen1=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
+  snap=$(fm_busy_record_snapshot "$dir/home/state" t1)
+  gen2=$("$ROOT/bin/fm-busy-event.sh" arm "$dir/home/state" t1)
+  [ "$gen1" != "$gen2" ] || fail "a relaunch must arm a new generation"
+  "$ROOT/bin/fm-busy-event.sh" apply "$dir/home/state" t1 busy \
+    --gen "$gen2" --source claude-hook --event UserPromptSubmit
+  fm_busy_record_manual_interrupt "$ROOT" "$dir/home/state" t1 claude "$snap" \
+    || fail "a correction for a replaced incarnation must not error"
+  after=$(fm_busy_record_read "$dir/home/state" t1)
+  [ "${after%% *}" = busy ] \
+    || fail "an interrupt correction must not idle a relaunched incarnation, got '$after'"
+  pass "fm-control interrupt: the busy correction yields to a relaunched incarnation"
 }
 
 test_muse_interrupt_confirms_adapter_acknowledgement() {
@@ -1119,6 +1137,7 @@ test_idle_agent_is_not_interrupted
 test_interrupt_without_acknowledgement_preserves_busy_state
 test_claude_interrupt_records_interrupt_idle
 test_interrupt_correction_yields_to_a_newer_turn
+test_interrupt_correction_yields_to_a_relaunched_incarnation
 test_muse_interrupt_confirms_adapter_acknowledgement
 test_interrupt_revalidates_agent_after_acknowledgement_wait
 test_exit_accepts_agent_stopped_by_busy_interrupt

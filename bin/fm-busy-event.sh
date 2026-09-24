@@ -210,6 +210,7 @@ fi
 if [ "$GEN" != "$CURRENT" ]; then
   lock_release
   umask "$old_umask"
+  [ -z "$IF_SEQ" ] || exit 0
   echo "error: stale busy-state gen for $ID (event rejected)" >&2
   exit 1
 fi
