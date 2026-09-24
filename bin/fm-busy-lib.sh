@@ -1245,16 +1245,24 @@ fm_busy_record_manual_interrupt() {  # <fm-root> <state-dir> <id> <harness> [sna
     --gen "${snapshot%%:*}" --source fm-interrupt --event interrupt --if-seq "${snapshot##*:}"
 }
 
-# fm_busy_record_snapshot: "<gen>:<seq>" for the armed incarnation and its
-# record seq (0 when there is no record), or empty when no gen is armed. A
+# fm_busy_record_snapshot: "<gen>:<seq>" read from the busy record in one
+# read (the record is replaced atomically), or empty when there is no
+# readable record. A
 # caller captures it before it sends an interrupt key and passes it to
 # fm_busy_record_manual_interrupt, so neither a relaunch nor a turn that
 # begins after the key is overwritten as idle.
 fm_busy_record_snapshot() {  # <state-dir> <id>
-  local out gen
+  local line f gen='' seq=''
   local -a fields
-  out=$(fm_busy_record_read "$1" "$2") || out=
-  IFS=' ' read -r -a fields <<< "$out"
-  gen=$(fm_busy_current_gen "$1" "$2") || return 0
-  printf '%s:%s' "$gen" "${fields[3]:-0}"
+  IFS= read -r line < "$(fm_busy_record_path "$1" "$2")" 2>/dev/null || return 0
+  IFS=' ' read -r -a fields <<< "$line"
+  for f in "${fields[@]:1}"; do
+    case "$f" in
+      gen=*) gen=${f#gen=} ;;
+      seq=*) seq=${f#seq=} ;;
+    esac
+  done
+  fm_busy_token_valid "$gen" || return 0
+  case "$seq" in ''|*[!0-9]*) return 0 ;; esac
+  printf '%s:%s' "$gen" "$seq"
 }
